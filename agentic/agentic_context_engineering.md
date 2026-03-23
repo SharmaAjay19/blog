@@ -6,7 +6,7 @@
 
 ---
 
-> **A note on provenance.** The principles in this article are not theoretical. They were forged building [Azure SRE Agent](https://learn.microsoft.com/en-us/azure/sre-agent/) — a production AI system that autonomously manages cloud infrastructure and handles incidents at scale. We started with 100+ tools, 50+ specialized sub-agents, and a prompt that read like a policy manual. We ended with 5 core tools and a handful of generalists. The agent got more reliable, not less. What follows is the distillation of those failures, pivots, and hard-won patterns — cross-referenced against research from across the industry that, strikingly, arrived at the same conclusions through entirely independent paths.
+> **A note on provenance.** The principles in this article are not theoretical. They were forged building <a href="https://learn.microsoft.com/en-us/azure/sre-agent/" target="blank_">Azure SRE Agent</a> — a production AI system that autonomously manages cloud infrastructure and handles incidents at scale. We started with 100+ tools, 50+ specialized sub-agents, and a prompt that read like a policy manual. We ended with 5 core tools and a handful of generalists. The agent got more reliable, not less. What follows is the distillation of those failures, pivots, and hard-won patterns — cross-referenced against research from across the industry that, strikingly, arrived at the same conclusions through entirely independent paths.
 
 ---
 
