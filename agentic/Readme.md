@@ -1,8 +1,8 @@
 # Agentic — Writing Guide
 
 **Publication:** [Agentic](https://SharmaAjay19.github.io/blog/agentic/)
-**Accent color:** `#b8f050` — Acid green
-**Body font:** Lora
+**Accent color:** `#1a8917` — Green (shared platform accent)
+**Body font:** Source Serif 4 (shared platform serif)
 **Tone:** Analytical
 
 > Agentic publishes deep technical architecture analysis grounded in the author's direct experience building large-scale production agentic AI systems — the failure modes, pivots, and hard-won principles that don't make it into the documentation.

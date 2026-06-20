@@ -83,75 +83,76 @@ All publications share a design lineage. They are recognizably from the same aut
 
 ### Shared Invariants (Never Break These)
 
-**Background palette:**
+**Color palette (light theme):**
 ```css
---bg:    #0a0905;   /* near-black warm base — every publication uses this */
---bg2:   #100f0a;   /* card surfaces, about strips */
---bd:    #222018;   /* default hairline borders */
---bd2:   #302e24;   /* emphasis dividers */
---tx:    #e8e4d8;   /* primary text — warm off-white, never pure white */
---tx2:   #857f6e;   /* secondary text — metadata, subtitles */
---tx3:   #3c3929;   /* faint text — decorative separators, footer */
+--bg:         #ffffff;   /* page background — clean white */
+--bg-soft:    #fafafa;   /* card / strip surfaces, hover fills */
+--bg-code:    #f6f8fa;   /* inline code + code-block background */
+--text:       #242424;   /* primary text — near-black, never pure #000 */
+--text-soft:  #5c5c5c;   /* secondary text — subtitles, de-emphasis */
+--text-faint: #8a8a8a;   /* faint text — metadata, dates, captions */
+--border:     #ececec;   /* default hairline borders */
+--border-2:   #dcdcdc;   /* emphasis dividers, hover borders */
+--accent:     #1a8917;   /* the single brand green — see below */
 ```
 
-**Typography stack (load from Google Fonts):**
+**Typography stack:**
 ```
-Fraunces — display, headings, masthead (variable: ital, opsz, wght)
-DM Mono  — UI chrome: nav, metadata, tags, dates, code labels
+Source Serif 4 — display, headings, AND body copy (the only loaded webfont)
+System sans    — UI chrome: nav, metadata, tags, dates, section labels
+System mono    — code blocks and inline code
 ```
 
-**Body font:** Each publication chooses its own body serif. This is the primary typographic differentiator between publications. Options used or available:
-- `Lora` — balanced reading serif, good for technical/analytical writing
-- `Instrument Serif` — refined, slightly editorial, good for author/hub pages
-- New publications must choose a distinct serif not already used by a sibling publication.
+Only **one** webfont is loaded — Source Serif 4 (variable: ital, opsz, wght) — and it carries both headings and body. The sans and mono stacks are native system fonts. Declare all three as variables:
+
+```css
+--serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+--sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+--mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+```
+
+**Body font:** Source Serif 4 is the shared reading serif across every publication — not a per-publication differentiator. Publications differ through tone and accent usage, not typeface swaps.
 
 **Layout constants:**
 ```css
---wide: 1080px;   /* max-width for all full-bleed sections */
---max:  740px;    /* max-width for article body text */
---r:    3px;      /* border-radius default */
+--max:  720px;   /* article body measure (the root hub uses 1100px for its grid) */
+--wide: 1100px;  /* full-width sections: hero, article list, publication grid */
 --ease: cubic-bezier(.4,0,.2,1);
+/* Border radius is intentionally varied, not one token:
+   12px cards · 8px code blocks · 100px tag/topic pills · 4px inline code */
 ```
 
-**Typography scale (article body):**
-- Display / H1: Fraunces 800, `clamp(2rem, 5.5vw, 3.25rem)`, `letter-spacing: -.035em`
-- H2: Fraunces 700, `1.45rem`, with `border-bottom: 1px solid var(--bd)`
-- H3: Fraunces 700, `1.1rem`
-- Body: publication body font, `1.05rem`, `line-height: 1.82`
-- Metadata / UI: DM Mono, `0.62–0.72rem`, `letter-spacing: .08–.18em`, uppercase
+**Typography scale (article page):**
+- Article title (header H1): Source Serif 700, `clamp(2.1rem, 5.5vw, 3.25rem)`, `letter-spacing: -.025em`
+- Standfirst (opening deck): Source Serif, `1.4rem`, `var(--text-soft)`
+- Body H2: Source Serif 700, `1.7rem`, generous top margin — **no** border-bottom
+- Body H3: Source Serif 700, `1.35rem`
+- Body H4: Source Serif 600, `1.1rem`, `var(--text-soft)`
+- Body copy: Source Serif, `1.25rem`, `line-height: 1.7`, `var(--text)`
+- Metadata / UI / tags: system sans, `.72–.85rem`; uppercase labels use `letter-spacing: .06–.08em`
 
-### Per-Publication Differentiators
+### The Accent Color
 
-Each publication defines exactly one accent color. This color appears in:
-- Tags and tag borders
-- Left-border hover reveals on cards
+The platform uses **one** accent green — `#1a8917` — shared by the root hub and every publication. It appears in:
+- Tags, the "Read publication" CTA, and card eyebrows
 - The reading progress bar
-- The blinking cursor (if used in masthead)
-- Blockquote left borders in articles
-- Inline code text color
+- Blockquote left borders (the "Key takeaway" callouts)
+- Links on hover (text + underline)
+- The read-time arrow
 
-**Accent color registry — claim a color when creating a publication:**
-
-| Publication | Accent (Hex) | CSS Name |
-|---|---|---|
-| `agentic/` | `#b8f050` | Acid green |
-| `systems/` | `#60b4f0` | Sky blue *(reserved)* |
-| *(next)* | Choose from: `#f07060` coral, `#c084fc` violet, `#34d399` emerald, `#fb923c` orange | |
-
-**Rule:** No two publications may share an accent color. The root hub uses `#f0b429` (amber) — that color is reserved for the root and must not be used by any publication.
+**Rule:** Do not reintroduce a per-publication accent registry or a dark theme. The shipped design consolidated to a single green for brand cohesion. If a future publication genuinely needs its own accent, scope it as a CSS-variable override **inside that publication's `index.html` only** — never globally, and never as a dark surface.
 
 ### Prohibited Design Choices
 
 The following are banned across the entire platform:
 
-- ❌ Inter, Roboto, Arial, or system-ui as any font
-- ❌ Purple gradients on light or dark backgrounds
-- ❌ Generic card shadows (box-shadow with blur)
-- ❌ Rounded pills as the primary border radius (use `3px` sharp corners)
-- ❌ Emoji in navigation, headings, or tags
+- ❌ Pure black (`#000`) text or pure-black backgrounds — use `--text` / `--bg`
+- ❌ A second webfont beyond Source Serif 4 — sans and mono stay native
+- ❌ Dark-theme surfaces — the platform is a light reading theme
+- ❌ Purple / neon gradients, or "electric" colors as a primary surface
 - ❌ Full-bleed hero images or background photographs
-- ❌ Any color that appears "electric" or "neon" as a primary surface color
-- ❌ Sticky sidebars with table-of-contents (use a clean reading progress bar instead)
+- ❌ Emoji in navigation, headings, or tags
+- ❌ Sticky table-of-contents sidebars (use the reading progress bar instead)
 
 ---
 
@@ -168,7 +169,7 @@ Before writing a line of HTML, answer these four questions. Write the answers do
 1. **Topic:** What is the precise domain? (e.g., "Production failure analysis in distributed systems" — not "systems" in general)
 2. **Reader:** Who reads this? What do they already know? What brings them here?
 3. **Tone:** Pick one from this list and commit: `analytical`, `narrative`, `tutorial`, `polemical`, `investigative`. The publication's README will enforce this tone on every article.
-4. **Accent color:** Choose from the available colors in the registry above. Register it by updating this README.
+4. **Personality:** The platform ships a single shared green accent (`#1a8917`) and a single shared serif (Source Serif 4); a new publication differentiates through its topic, tone, and voice — not a new color or typeface. (If a distinct accent is truly warranted, scope it as a CSS-variable override inside that publication's `index.html` only.)
 
 ---
 
@@ -191,30 +192,30 @@ The publication `index.html` is a single-file SPA with hash-based routing. It mu
 #### 3a. Required Structural Elements
 
 ```
-sticky nav bar
-  - Publication title (left, Fraunces 700)
-  - Blinking cursor after title (accent color, CSS step-end animation)
-  - "All Articles" link (right, DM Mono uppercase, links to same page home)
+sticky nav bar (frosted: translucent white + backdrop-blur)
+  - Publication title (left, Source Serif 700)
+  - "All Articles" link (right, system sans, links to home)
 
 hero section
-  - dot-grid texture: CSS radial-gradient at 32px intervals, ~5% opacity, accent color
-  - gradient fade overlay (left side, rgba bg toward transparent)
-  - kicker line: "Journal of [Domain] · Vol. N" (DM Mono, accent color)
-  - masthead: publication title (Fraunces 900, clamp 4rem–8.5rem)
-  - blinking cursor in masthead
-  - tagline: what this publication covers (publication body font, italic, tx2)
-  - meta row: Issue number · Month Year · N articles (DM Mono, tx3)
+  - kicker line: "Journal of [Domain] · Vol. N" (system sans, accent, uppercase)
+  - masthead: publication title (Source Serif 700, clamp 3rem–6rem)
+  - tagline: what this publication covers (Source Serif, var(--text-soft))
+  - meta row: Issue number · Month Year · N articles (system sans, var(--text-faint))
 
 articles section
-  - section label: "Latest Issue" with rule line extending to edge
+  - section label: "Latest Issue" (system sans, uppercase, faint)
   - featured card (latest article with `featured: true`)
   - article grid (remaining articles, auto-fill columns)
 
 article page (rendered on #read= hash)
   - back button: "← All Articles"
-  - article header: tags, title, subtitle, byline (date · read time)
-  - article body: full markdown rendered with styled typography
-  - reading progress bar: 2px, fixed top, accent color
+  - article header: tags, title, subtitle, byline (Author · Date · Read time)
+  - article body: full markdown; the opening deck paragraph is styled as a
+    standfirst (larger, var(--text-soft))
+  - reading progress bar: 3px, fixed top, accent color
+
+Note: the shipped design has NO blinking cursor and NO dot-grid texture — the
+masthead is a clean Source Serif wordmark on white.
 ```
 
 #### 3b. Article Manifest
@@ -230,7 +231,8 @@ const ARTICLES = [
     date:     'YYYY-MM-DD',
     tags:     ['Tag One', 'Tag Two'],
     featured: true,                      // only one article is featured at a time
-    readTime: 'N min read'               // omit to auto-calculate from word count
+    author:   'Ajay Sharma',             // optional — defaults to 'Ajay Sharma'
+    readTime: 'N min read'               // null/omit to auto-calculate (~220 wpm)
   }
 ];
 ```
@@ -248,7 +250,7 @@ Load from CDN. These exact versions are tested and approved:
 ```html
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 ```
 
 Configure `marked` with:
@@ -261,50 +263,66 @@ Configure `marked` with:
 These CSS rules must appear in every publication `index.html` and must not deviate:
 
 ```css
-/* H2s get a border-bottom hairline — this is a signature element */
-.article-body h2 {
-  border-bottom: 1px solid var(--bd);
-  padding-bottom: .6rem;
+/* Body is Source Serif at a comfortable reading size */
+.article-body {
+  font-family: var(--serif); font-size: 1.25rem;
+  line-height: 1.7; color: var(--text);
 }
 
-/* Blockquotes use the accent color — this is how "Insight" callouts look */
+/* The opening deck reads as a standfirst / editorial lead */
+.article-body > p:first-child {
+  font-size: 1.4rem; line-height: 1.5; color: var(--text-soft);
+}
+
+/* H2s use generous spacing, NOT a border — clean, airy hierarchy */
+.article-body h2 { font-size: 1.7rem; font-weight: 700; margin: 3rem 0 1rem; }
+
+/* Blockquotes are the accent "Key takeaway" callouts: a 3px green rule,
+   italic, no background fill */
 .article-body blockquote {
-  border-left: 2px solid var(--acc);
-  background: var(--surface);
-  border-radius: 0 3px 3px 0;
-  padding: .9rem 1.5rem .9rem 1.75rem;
+  border-left: 3px solid var(--accent);
+  padding: .25rem 0 .25rem 1.75rem; margin: 2rem 0;
 }
-.article-body blockquote p { font-style: italic; color: var(--tx2); }
+.article-body blockquote p { font-style: italic; color: var(--text-soft); }
+.article-body blockquote strong { color: var(--text); }
 
-/* Inline code gets accent-adjacent coloring — not pure white */
+/* Inline code: soft red on the code-surface tint */
 .article-body :not(pre) > code {
-  background: var(--surface2);
-  color: [accent-adjacent — lighten the accent by ~20%];
+  font-family: var(--mono); background: var(--bg-code);
+  color: #c7254e; border: 1px solid var(--border);
+  padding: .15em .4em; border-radius: 4px;
 }
 
-/* Tables use DM Mono — data should feel like data */
-.article-body table { font-family: var(--f-ui); font-size: .78rem; }
+/* Code blocks: light github theme, rounded 8px */
+.article-body pre {
+  background: var(--bg-code); border: 1px solid var(--border);
+  border-radius: 8px; padding: 1.25rem 1.5rem;
+}
 
-/* List markers use accent color */
-.article-body li::marker { color: var(--acc-tx); }
+/* Tables use the system sans — data should read as data */
+.article-body table { font-family: var(--sans); font-size: .92rem; }
+
+/* List markers are faint, not accent */
+.article-body li::marker { color: var(--text-faint); }
 ```
 
-#### 3e. The Featured Card Hover Effect
+#### 3e. Card Hover Effect
 
-This is a signature interaction. It must be implemented exactly:
+The signature interaction is a subtle lift, applied to the featured card and all article / publication cards:
 
 ```css
-.featured::before {
-  content: ''; position: absolute;
-  top: 0; left: 0; width: 3px; height: 100%;
-  background: var(--acc);
-  transform: scaleY(0); transform-origin: bottom;
-  transition: transform .28s cubic-bezier(.4,0,.2,1);
+.featured, .article-card {
+  border: 1px solid var(--border); border-radius: 12px;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
 }
-.featured:hover::before { transform: scaleY(1); }
+.featured:hover, .article-card:hover {
+  border-color: var(--border-2);
+  box-shadow: 0 12px 28px rgba(0,0,0,.07);
+  transform: translateY(-2px);
+}
 ```
 
-A vertical 3px bar in accent color slides up from the bottom on hover. This appears on the featured card and on all article grid cards. It is the most recognizable micro-interaction in the platform.
+On hover the border darkens slightly, a soft shadow appears, and the card rises 2px; the read-more arrow nudges right (`translateX(3px)`). There is no accent side-bar.
 
 #### 3f. Reading Progress Bar
 
@@ -315,8 +333,8 @@ A vertical 3px bar in accent color slides up from the bottom on hover. This appe
 ```css
 #progress {
   position: fixed; top: 0; left: 0;
-  height: 2px; width: 0%;
-  background: var(--acc);
+  height: 3px; width: 0%;
+  background: var(--accent);
   z-index: 200;
   transition: width .08s linear;
   display: none; /* shown only on article pages */
@@ -374,36 +392,32 @@ Find the stats block and increment the publication count:
 Replace the first `coming-soon` card (or add a new card) in the `.pub-grid` div:
 
 ```html
-<a class="pub-card" href="./{publication-slug}/" data-accent="{accent-identifier}">
+<a class="pub-card" href="./{publication-slug}/">
   <div class="pub-vol">Vol. {N} &middot; {Year}</div>
   <div class="pub-title">{Publication Title}</div>
   <p class="pub-desc">
     {One or two sentences. What does this publication cover?
     Who is it for? Keep it under 25 words.}
   </p>
-  <div class="pub-footer">
-    <div class="pub-tags">
-      <span class="pub-tag">{Tag One}</span>
-      <span class="pub-tag">{Tag Two}</span>
-      <span class="pub-tag">{Tag Three}</span>
-    </div>
-    <span class="pub-cta">
-      Read publication <span class="pub-arrow">&#8594;</span>
-    </span>
+  <div class="pub-tags">
+    <span class="pub-tag">{Tag One}</span>
+    <span class="pub-tag">{Tag Two}</span>
+    <span class="pub-tag">{Tag Three}</span>
   </div>
+  <span class="pub-cta">Read publication <span class="pub-arrow">&#8594;</span></span>
 </a>
 ```
 
-**Then add the accent CSS** for the new publication's color to the root `index.html` `<style>` block:
+No per-publication accent CSS is required — the root uses the single green accent (`var(--accent)`) for every card's eyebrow, tags, and CTA. A not-yet-live publication uses a `coming-soon` modifier card with a `coming-badge` instead of a CTA:
 
-```css
-.pub-card[data-accent="{accent-identifier}"]::before { background: {accent-hex}; }
-.pub-card[data-accent="{accent-identifier}"] .pub-vol   { color: {accent-tx-hex}; }
-.pub-card[data-accent="{accent-identifier}"] .pub-tag   { color: {accent-tx-hex}; border-color: rgba({r},{g},{b},.22); background: rgba({r},{g},{b},.06); }
-.pub-card[data-accent="{accent-identifier}"] .pub-arrow { color: {accent-hex}; }
+```html
+<div class="pub-card coming-soon">
+  <div class="pub-vol">Coming soon</div>
+  <div class="pub-title">{Title} <span class="coming-badge">Soon</span></div>
+  <p class="pub-desc">{One or two sentences.}</p>
+  <div class="pub-tags"> ... </div>
+</div>
 ```
-
-Where `accent-tx-hex` is the accent color darkened by ~30% for use on dark background text.
 
 **Rules for the publication card description:**
 - Maximum 25 words
@@ -423,8 +437,8 @@ Every publication folder contains a `README.md` that is the authoritative writin
 # {Publication Title} — Writing Guide
 
 **Publication:** [{Publication Title}](https://{github-pages-url}/{slug}/)
-**Accent color:** {hex} — {name}
-**Body font:** {Font Name}
+**Accent color:** `#1a8917` green (shared platform accent)
+**Body font:** Source Serif 4 (shared platform serif)
 **Tone:** {one of: analytical | narrative | tutorial | polemical | investigative}
 
 > One sentence stating the publication's editorial mission.
@@ -640,11 +654,11 @@ Before committing a new publication for the first time:
 - [ ] At least one complete article exists in `{slug}/`
 - [ ] The article appears correctly in the featured card on the publication homepage
 - [ ] The reading progress bar activates on the article page and disappears on back navigation
-- [ ] The blinking cursor renders in accent color in both nav and masthead
-- [ ] The featured card left-border hover effect works at all viewport widths
+- [ ] The article header shows the byline: Author · Date · Read time
+- [ ] The card lift/shadow hover effect works at all viewport widths
 - [ ] Hash navigation works: `#` loads home, `#read=filename.md` loads article
-- [ ] All fonts load from Google Fonts (test on a clean connection or incognito)
-- [ ] The publication accent color does not clash with or duplicate any sibling publication's accent
+- [ ] Source Serif 4 loads from Google Fonts; system sans/mono render with no extra requests
+- [ ] The single green accent (`--accent`) is used consistently; no dark-theme surfaces were introduced
 - [ ] The root `index.html` has been updated with the new publication card
 - [ ] The root `index.html` publication count stat has been incremented
 - [ ] Mobile layout renders correctly at 375px width (no horizontal overflow, no clipped text)
@@ -668,11 +682,12 @@ Before adding any article to the manifest:
 ### Design Gates
 
 - [ ] No hardcoded colors outside of the defined CSS variables
-- [ ] Accent color is used consistently: tags, progress bar, blockquote borders, cursor, card hover
-- [ ] `var(--tx)`, `var(--tx2)`, `var(--tx3)` are used for text hierarchy — never hardcoded grays
-- [ ] No Inter, Roboto, Arial, or system-ui fonts appear anywhere
-- [ ] `max-width: var(--max)` (740px) is applied to article body
-- [ ] `max-width: var(--wide)` (1080px) is applied to all full-bleed sections
+- [ ] Accent color is used consistently: tags, progress bar, blockquote borders, link hover, card eyebrow/CTA
+- [ ] `var(--text)`, `var(--text-soft)`, `var(--text-faint)` are used for text hierarchy — never hardcoded grays
+- [ ] Source Serif 4 is the only loaded webfont; sans/mono use the native system stacks
+- [ ] `max-width: var(--max)` (720px) is applied to the article body
+- [ ] `max-width: var(--wide)` (1100px) is applied to full-width sections
+- [ ] The light theme is preserved — white background, `--text` (not pure black) copy
 
 ---
 
@@ -683,15 +698,17 @@ Before adding any article to the manifest:
 | Property | Value |
 |---|---|
 | **URL** | `https://SharmaAjay19.github.io/blog/agentic/` |
-| **Accent** | `#b8f050` acid green |
-| **Body Font** | Lora |
+| **Accent** | `#1a8917` green (the shared platform accent) |
+| **Body Font** | Source Serif 4 (shared platform serif) |
 | **Tone** | Analytical |
 | **Mission** | Deep technical architecture analysis grounded in production agentic AI systems experience |
-| **Articles** | 1 |
+| **Articles** | 3 |
 | **Writing Guide** | `agentic/README.md` |
 
 **Current articles:**
 - `agentic_context_engineering.md` — "The RAM Doesn't Lie: Engineering Context as the Primary Lever for Reliable AI Agents"
+- `trust_but_verify.md` — "Trust but Verify — Except Nobody Built the Verify Part" (Part 1 of 2)
+- `building_the_verify_part.md` — "Building the Verify Part" (Part 2 of 2)
 
 ---
 
