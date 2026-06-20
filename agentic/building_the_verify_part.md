@@ -1,8 +1,4 @@
-# Building the Verify Part
-
 *How two small documents — a pass-standard and a verification report — close the gap that AI coding agents leave wide open*
-
-*Ajay Sharma — Principal Software Engineer, Microsoft CoreAI*
 
 *Part 2 of a two-part series. [Part 1](#read=trust_but_verify.md) named the problem: generation got cheap, verification didn't, and the agent grades its own homework. This part proposes the fix.*
 

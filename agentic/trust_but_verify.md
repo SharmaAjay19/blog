@@ -1,8 +1,4 @@
-# Trust but Verify — Except Nobody Built the Verify Part
-
 *Notes on the quiet failure modes of working with AI coding agents — and the single gap underneath all of them*
-
-*Ajay Sharma — Principal Software Engineer, Microsoft CoreAI*
 
 *Part 1 of a two-part series. [Part 2](#read=building_the_verify_part.md) proposes the fix: the two artifacts that close the gap.*
 

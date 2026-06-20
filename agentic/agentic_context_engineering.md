@@ -1,8 +1,4 @@
-# The RAM Doesn't Lie: Engineering Context as the Primary Lever for Reliable AI Agents
-
 *How production deployments across the industry are converging on context architecture — not model quality — as the determinant of agentic system reliability*
-
-*Ajay Sharma — Principal Software Engineer, Microsoft CoreAI*
 
 ---
 

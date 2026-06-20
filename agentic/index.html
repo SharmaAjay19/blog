@@ -256,10 +256,11 @@
       line-height: 1.5; margin-bottom: 1.75rem;
     }
     .article-byline {
-      display: flex; align-items: center; gap: .75rem;
+      display: flex; align-items: center; gap: .55rem;
       font-size: .9rem; color: var(--text-faint); flex-wrap: wrap;
       padding-top: 1.5rem; border-top: 1px solid var(--border);
     }
+    .byline-author { color: var(--text); font-weight: 600; }
     .byline-sep { color: var(--border-2); }
 
     /* ── Article body typography ───────────────────────────────────── */
@@ -300,6 +301,11 @@
     /* Body text */
     .article-body p { margin-bottom: 1.6rem; }
     .article-body p:last-child { margin-bottom: 0; }
+    /* Standfirst — the opening deck paragraph reads as an editorial lead */
+    .article-body > p:first-child {
+      font-size: 1.4rem; line-height: 1.5; color: var(--text-soft);
+      margin-bottom: 1.9rem;
+    }
     .article-body strong { font-weight: 700; color: var(--text); }
     .article-body em { font-style: italic; }
 
@@ -727,6 +733,7 @@ async function renderArticle(file) {
   const readTime = (meta && meta.readTime) || estimateReadTime(raw);
   const title    = (meta && meta.title)    || file;
   const subtitle = (meta && meta.subtitle) || '';
+  const author   = (meta && meta.author)   || 'Ajay Sharma';
   const date     = (meta && meta.date)     ? fmtDate(meta.date) : '';
   const tags     = (meta && meta.tags)     || [];
 
@@ -750,9 +757,9 @@ async function renderArticle(file) {
         <h1 class="article-title">${esc(title)}</h1>
         ${subtitle ? `<p class="article-subtitle">${esc(subtitle)}</p>` : ''}
         <div class="article-byline">
-          ${date ? `<span>${date}</span>` : ''}
-          ${date && readTime ? `<span class="byline-sep">·</span>` : ''}
-          ${readTime ? `<span>${readTime}</span>` : ''}
+          <span class="byline-author">${esc(author)}</span>
+          ${date ? `<span class="byline-sep">·</span><span>${date}</span>` : ''}
+          ${readTime ? `<span class="byline-sep">·</span><span>${readTime}</span>` : ''}
         </div>
       </div>
 
