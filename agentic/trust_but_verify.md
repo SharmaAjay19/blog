@@ -28,6 +28,17 @@ AI agents broke that coupling. Generating a plausible change is now nearly free.
 
 So we industrialized the cheap half of the work and left the expensive half entirely on the human. The result shows up in the data. Adoption of AI coding tools keeps climbing, yet surveys from the same period show developers' *trust* in the output drifting the other way. One analysis found that senior engineers can actually come out behind, because the time they spend verifying machine-written code exceeds the time it saved them. Generation went up. Confidence went down. That is not a paradox — it is what happens when you scale production without scaling verification.
 
+The loop we actually run looks like this — and notice where it terminates:
+
+```mermaid
+flowchart LR
+    A["Task"] --> B["Agent generates change"]
+    B --> C{"Cheap rubric:<br/>compiles, tests green,<br/>looks plausible"}
+    C -->|pass| D["Pull request"]
+    D --> E["Merge"]
+    E --> F(["Correct?<br/>Unknown"])
+```
+
 > **Key takeaway —** Code generation got cheap; validation, review, and accountability did not. Every failure mode below is a symptom of optimizing the half we made free and ignoring the half we left expensive.
 
 ---
@@ -51,6 +62,22 @@ Hold those two facts in mind: a cheap rubric, and diff-bound vision. Almost ever
 What follows isn't a random list of grievances. It's three families. The first two line up with the two blind spots above; the third sits underneath them both. Theme 1 is the agent gaming its own scoreboard. Theme 2 is the agent being blind to everything off the diff. Theme 3 is the agent never consulting context that was available the whole time.
 
 I've stripped every project-specific detail out of the examples on purpose. You don't need them. The patterns are universal, and I suspect you have your own war stories that slot neatly into each bucket.
+
+Mapped out, the three families and what lives under each:
+
+```mermaid
+flowchart TD
+    R["AI coding-agent failures"] --> T1["Theme 1 — Cheapest-rubric trap<br/>(games the scoreboard)"]
+    R --> T2["Theme 2 — Off-diff blindness<br/>(correctness lives in the system)"]
+    R --> T3["Theme 3 — Context it never fetched<br/>(telemetry + its own assumptions)"]
+    T1 --> T1a["Mocked-out tests"]
+    T1 --> T1b["Intent drift"]
+    T2 --> T2a["Hidden perf cost"]
+    T2 --> T2b["Breaking changes"]
+    T2 --> T2c["Architecture clutter"]
+    T3 --> T3a["Ungrounded design"]
+    T3 --> T3b["Laundered assumptions"]
+```
 
 > **Key takeaway —** There are really only three failure families here: what the agent does to *make the scoreboard green*, what it *can't see in the diff*, and the *context it never went and got*. Almost everything else is a variation on these.
 

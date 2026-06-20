@@ -362,6 +362,14 @@
       color: #24292e;
     }
 
+    /* Mermaid diagrams */
+    .article-body .mermaid {
+      margin: 2rem 0; padding: 1.5rem; text-align: center;
+      background: var(--bg-soft); border: 1px solid var(--border);
+      border-radius: 8px; overflow-x: auto; line-height: 1.4;
+    }
+    .article-body .mermaid svg { max-width: 100%; height: auto; }
+
     /* Tables */
     .article-body table {
       width: 100%; border-collapse: collapse;
@@ -456,6 +464,7 @@
 <!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 
 <script>
 "use strict";
@@ -539,15 +548,21 @@ function configureMarked() {
   const renderer = new marked.Renderer();
 
   renderer.code = function(code, lang) {
-    const language = (lang && hljs.getLanguage(lang)) ? lang : 'plaintext';
+    const text = typeof code === 'object' ? code.text : code;
+    const info = (typeof code === 'object' ? code.lang : lang) || '';
+    const langId = info.trim().split(/\s+/)[0];
+
+    // Mermaid blocks render as diagrams, not highlighted code
+    if (langId === 'mermaid') {
+      return `<div class="mermaid">${esc(text)}</div>`;
+    }
+
+    const language = (langId && hljs.getLanguage(langId)) ? langId : 'plaintext';
     let highlighted;
     try {
-      highlighted = hljs.highlight(
-        typeof code === 'object' ? code.text : code,
-        { language, ignoreIllegals: true }
-      ).value;
+      highlighted = hljs.highlight(text, { language, ignoreIllegals: true }).value;
     } catch (e) {
-      highlighted = esc(typeof code === 'object' ? code.text : code);
+      highlighted = esc(text);
     }
     return `<pre><code class="hljs language-${esc(language)}">${highlighted}</code></pre>`;
   };
@@ -771,6 +786,13 @@ async function renderArticle(file) {
     hljs.highlightElement(el);
   });
 
+  // Render any Mermaid diagrams in the article body
+  if (window.mermaid) {
+    try {
+      mermaid.run({ querySelector: '.article-body .mermaid' });
+    } catch (e) { /* leave diagram source visible on error */ }
+  }
+
   startProgress();
 }
 
@@ -779,6 +801,14 @@ async function renderArticle(file) {
 ════════════════════════════════════════════════════════════════════ */
 
 configureMarked();
+if (window.mermaid) {
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'loose',
+    theme: 'neutral',
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+  });
+}
 window.addEventListener('hashchange', route);
 route();
 </script>

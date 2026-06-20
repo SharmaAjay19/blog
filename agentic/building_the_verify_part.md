@@ -32,6 +32,21 @@ The tempting answer to "the agent took a shortcut" is "add a step where the agen
 
 The narrow place self-verification *does* work is when the rubric is external and the signal is real — when the model is checking its output against something it didn't get to invent, ideally from a **fresh context** that didn't inherit the original rationalizations. Which is the whole point: the value isn't the model grading itself. It's the model grading itself *against a standard you wrote* and *with evidence it had to go fetch.*
 
+The difference between the two, side by side:
+
+```mermaid
+flowchart TD
+    subgraph S["Self-verification (same context)"]
+        A1["Agent writes code"] --> A2["Same agent reviews it"]
+        A2 --> A3["Rehearses its own assumptions<br/>= rubber stamp"]
+    end
+    subgraph G["Grounded review (what works)"]
+        B1["Agent writes code"] --> B2["Fresh context grades it<br/>against the pass-standard"]
+        B2 --> B3["with fetched real evidence:<br/>run the path, query telemetry"]
+        B3 --> B4["Honest PASS / FAIL / UNVERIFIED"]
+    end
+```
+
 > **Key takeaway —** A model self-checking inside the same context mostly rehearses its own assumptions. Self-verification only earns trust when it's measured against an external standard and grounded in real, fetched evidence — not when the agent is asked, nicely, whether it thinks it did a good job.
 
 ---
@@ -184,6 +199,17 @@ Put the two together and the workflow changes shape. Instead of *prompt → code
 1. **Contract.** Before implementation, you and the agent co-write the pass-standard. You hold the pen on intent and constraints; the agent drafts criteria and proposes the sources of truth. You both sign off. (This is also the cheapest possible moment to discover you meant different things — the intent-drift failure dies here, for the price of ten minutes.)
 2. **Work.** The agent implements *against* the standard. The criteria act as a running checklist that pulls it off the diff and into telemetry, consumers, and the real integration path — because it knows it will be graded there.
 3. **Proof.** A fresh-context pass produces the verification report against the standard. Failed and unverified items block the merge. You read one page and decide.
+
+As a loop — with the feedback edge the old "prompt → code → hope" never had:
+
+```mermaid
+flowchart LR
+    PS["1 · Pass-standard<br/>written before any code"] --> W["2 · Agent implements<br/>against the standard"]
+    W --> VR["3 · Verification report<br/>fresh context, vs the standard"]
+    VR --> G{"All criteria<br/>green?"}
+    G -->|"FAIL / UNVERIFIED"| W
+    G -->|"all PASS"| M["Merge with confidence"]
+```
 
 A few honest caveats. The standard should be **proportional** — a one-line copy change doesn't need five off-diff criteria; a change to a payment or auth path needs all of them and more. The fresh-context reviewer isn't magic, but it meaningfully beats self-review because it doesn't inherit the rationalizations. And none of this removes the human — it *aims* the human, replacing an anxious skim of a giant diff with a focused read of a short, falsifiable proof.
 
