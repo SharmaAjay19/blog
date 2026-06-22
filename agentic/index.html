@@ -437,6 +437,42 @@
     @media (max-width: 600px) {
       .article-feedback { padding: 2rem 1.25rem 0; }
     }
+
+    /* ── Floating feedback rail (right margin, wide screens only) ─── */
+    .feedback-rail {
+      position: fixed; right: 1.5rem; top: 50%; transform: translateY(-50%);
+      z-index: 90; display: none;
+      flex-direction: column; align-items: center; gap: .5rem;
+      background: rgba(255,255,255,.92); backdrop-filter: saturate(180%) blur(8px);
+      border: 1px solid var(--border); border-radius: 16px;
+      padding: .75rem .6rem;
+      box-shadow: 0 6px 22px rgba(0,0,0,.08);
+    }
+    .rail-label {
+      font-family: var(--sans); font-size: .58rem; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--text-faint); margin-bottom: .1rem;
+    }
+    .rail-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px; padding: 0;
+      color: var(--text-soft); cursor: pointer;
+      background: var(--bg); border: 1px solid var(--border-2);
+      border-radius: 50%;
+      transition: color .15s, border-color .15s, background .15s, transform .1s;
+    }
+    .rail-btn:hover { color: var(--text); border-color: var(--text-faint); }
+    .rail-btn:active { transform: scale(.92); }
+    .rail-btn svg { width: 17px; height: 17px; display: block; }
+    .rail-btn.is-selected {
+      color: var(--accent); border-color: var(--accent);
+      background: rgba(26,137,23,.08);
+    }
+    /* Only show the rail where the page has margin room for it */
+    @media (min-width: 1080px) {
+      .feedback-rail { display: flex; }
+    }
+
     /* ── Loading state ─────────────────────────────────────────────── */
     .loading {
       display: flex; align-items: center; gap: .75rem;
@@ -601,31 +637,36 @@ function trackPageView(file) {
 ════════════════════════════════════════════════════════════════════════ */
 
 function setupFeedback(file, title) {
-  const root = document.getElementById('feedback');
-  if (!root) return;
+  const groups = [document.getElementById('feedback'), document.getElementById('feedback-rail')].filter(Boolean);
+  if (!groups.length) return;
   const key = 'feedback:' + file;
   let current = null;
   try { current = localStorage.getItem(key); } catch (e) {}
-  const btns   = root.querySelectorAll('.feedback-btn');
-  const thanks = root.querySelector('.feedback-thanks');
+
+  const btns = [];
+  groups.forEach(g => g.querySelectorAll('[data-vote]').forEach(b => btns.push(b)));
 
   function paint() {
     btns.forEach(b => b.classList.toggle('is-selected', b.dataset.vote === current));
-    if (thanks) thanks.hidden = !current;
+    groups.forEach(g => {
+      const t = g.querySelector('.feedback-thanks');
+      if (t) t.hidden = !current;
+    });
   }
   paint();
 
   btns.forEach(b => b.addEventListener('click', () => {
-    const vote = b.dataset.vote;       // 'up' | 'down'
-    if (vote === current) return;      // already the active vote
+    const vote = b.dataset.vote;                 // 'up' | 'down'
+    if (vote === current) return;                // already the active vote
     current = vote;
     try { localStorage.setItem(key, vote); } catch (e) {}
-    paint();
+    paint();                                      // keep both widgets in sync
     if (typeof gtag === 'function') {
       gtag('event', 'article_feedback', {
         rating: vote,
         article_file: file,
-        article_title: title
+        article_title: title,
+        placement: b.closest('#feedback-rail') ? 'rail' : 'inline'
       });
     }
   }));
@@ -887,7 +928,16 @@ async function renderArticle(file) {
         </div>
         <span class="feedback-thanks" hidden>Thanks for the feedback.</span>
       </div>
-    </div>`;
+    </div>
+    <aside class="feedback-rail" id="feedback-rail" aria-label="Was this article useful?">
+      <span class="rail-label">Useful?</span>
+      <button class="rail-btn" data-vote="up" type="button" aria-label="Yes, this was useful">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+      </button>
+      <button class="rail-btn" data-vote="down" type="button" aria-label="No, this was not useful">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>
+      </button>
+    </aside>`;
 
   // Re-highlight any code blocks marked.js may have left un-highlighted
   document.querySelectorAll('.article-body pre code:not(.hljs)').forEach(el => {
