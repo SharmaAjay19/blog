@@ -8,7 +8,7 @@
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
 
-    gtag('config', 'G-XGJJ755KNS');
+    gtag('config', 'G-XGJJ755KNS', { send_page_view: false });
   </script>
 
   <meta charset="UTF-8">
@@ -550,6 +550,21 @@ function tagsHTML(tags) {
   return (tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   ANALYTICS — send a GA4 page_view per SPA route
+   (the article lives in the #hash, so we send one virtual pageview per
+   article/home render; each shows up as its own page in GA4)
+════════════════════════════════════════════════════════════════════════ */
+
+function trackPageView(file) {
+  if (typeof gtag !== 'function') return;
+  const path = location.pathname + (file ? '?read=' + encodeURIComponent(file) : '');
+  gtag('event', 'page_view', {
+    page_title: document.title,
+    page_location: location.origin + path
+  });
+}
+
 /* ════════════════════════════════════════════════════════════════════
    MARKED — configure renderer with syntax highlighting
 ════════════════════════════════════════════════════════════════════ */
@@ -710,6 +725,8 @@ function renderHome() {
         ${grid}
       </div>
     </div>`;
+
+  trackPageView();
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -804,6 +821,7 @@ async function renderArticle(file) {
   }
 
   startProgress();
+  trackPageView(file);
 }
 
 /* ════════════════════════════════════════════════════════════════════
