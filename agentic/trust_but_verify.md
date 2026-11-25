@@ -1,167 +1,245 @@
-*Notes on the quiet failure modes of working with AI coding agents — and the single gap underneath all of them*
+*Seven ways an AI coding agent hands you work that looks finished and isn't, a check for each one that takes minutes, and the gap they all share*
 
-*Part 1 of a two-part series. [Part 2](#read=building_the_verify_part.md) proposes the fix: the two artifacts that close the gap.*
-
----
-
-You have probably already done this.
-
-You hand a task to an AI coding agent. It works for a while, narrates its progress in a long and confident transcript, and produces a pull request. The diff is clean. The tests are green. The description is well-written — maybe a little *too* well-written. You skim it, you nod, you merge.
-
-And somewhere in the back of your mind a small voice asks a question you cannot actually answer: *is this correct?*
-
-Not "did it compile." Not "did the tests pass." **Correct.** Does it do the thing you actually needed — without quietly breaking something else, without paying a hidden cost at scale, without making the next person's change harder? You don't know. You got a pull request and a transcript. What you did not get was a way to *check*.
-
-This article is about that gap. It is not a list of solutions. It is an attempt to name, clearly, the failure modes I keep hitting when I build software with AI agents — the ones that are easy to feel and hard to articulate — and to point at the one structural problem sitting underneath all of them.
-
-If you have shipped anything with these tools, I think you will recognize every one of these.
-
-> **Key takeaway —** The agent's job ends at "a pull request exists." Yours begins at "is it right?" — and almost nothing in the current workflow is designed to help you answer that.
+*Part 1 of 2. [Part 2](#read=building_the_verify_part.md) turns these checks into two short documents you can attach to every agent task.*
 
 ---
 
-## The asymmetry nobody priced in
+> **A note on provenance.** Every failure in this piece happened in my own work, building production software with AI coding agents as everyday collaborators. I have removed project names and domain details, and the code snippets are reduced to their shape, but the mechanics are as they happened. Where public research has measured the same pattern, I cite it.
 
-For most of software's history, writing code and trusting code were roughly coupled. Producing a change took effort, and that effort *was* a big part of how you came to believe it worked. You held the problem in your head long enough to build a mental model of it.
+---
 
-AI agents broke that coupling. Generating a plausible change is now nearly free. Convincing yourself it is *actually right* costs exactly as much as it always did — arguably more, because you no longer did the thinking that used to come bundled with the typing.
+A pull request from a coding agent usually looks better than one written by a person. The description is organized, the tests pass, and the commits are tidy. That polish is part of the problem, because it invites a skim and a merge. The questions that decide whether a change is safe go unasked: does it solve the right problem, what does it cost at production volume, and who else depends on the behavior it changed? Weeks later a tenant gets throttled, or p99 latency doubles on one endpoint, or someone notices that the new integration test never touched the integration. Green CI did not answer those questions. Neither did the forty screens of transcript in which the agent explained what it had done.
 
-So we industrialized the cheap half of the work and left the expensive half entirely on the human. The result shows up in the data. Adoption of AI coding tools keeps climbing, yet surveys from the same period show developers' *trust* in the output drifting the other way. One analysis found that senior engineers can actually come out behind, because the time they spend verifying machine-written code exceeds the time it saved them. Generation went up. Confidence went down. That is not a paradox — it is what happens when you scale production without scaling verification.
+What follows are the seven ways this has gone wrong for me, grouped by cause, each with a check you can run before you merge.
 
-The loop we actually run looks like this — and notice where it terminates:
+## Cheap to write, expensive to trust
+
+Writing code used to be how you came to trust it. You held the problem in your head long enough to type a solution, and by the end you had a working model of what the change touched. Agents removed the typing, and the model-building went with it. A plausible change now costs a prompt. Deciding whether it is right costs what it always did, plus the time to rebuild the understanding you would have gotten for free by writing it yourself.
+
+The survey and trial data are consistent with that. In Stack Overflow's 2025 Developer Survey, 84% of respondents said they use or plan to use AI tools, up from 76% a year earlier, while the share who trust the accuracy of AI output fell from 40% to 29%. Two thirds said they spend more time fixing AI code that is "almost right." A randomized trial by METR is sharper. Sixteen experienced open-source maintainers completed 246 real tasks in repositories they knew well, and tasks where AI was allowed took 19% longer. The developers estimated afterwards that AI had made them 20% faster (Becker et al., 2025). Part of the difference was time spent prompting, waiting on, and reviewing AI output.
+
+So the cheap half of the work got automated and the expensive half stayed with the reviewer, who now has less context than before. This is the loop most teams run, and where it stops:
 
 ```mermaid
 flowchart LR
-    A["Task"] --> B["Agent generates change"]
-    B --> C{"Cheap rubric:<br/>compiles, tests green,<br/>looks plausible"}
-    C -->|pass| D["Pull request"]
+    A["Task"] --> B["Agent writes change"]
+    B --> C{"Compiles, tests green,<br/>reads plausibly?"}
+    C -->|yes| D["Pull request"]
     D --> E["Merge"]
-    E --> F(["Correct?<br/>Unknown"])
+    E --> F(["Correct?<br/>Never checked"])
 ```
 
-> **Key takeaway —** Code generation got cheap; validation, review, and accountability did not. Every failure mode below is a symptom of optimizing the half we made free and ignoring the half we left expensive.
+Nearly every failure below comes from one of three habits. First, the agent grades its own work with the cheapest rubric available: it compiles, the tests are green, the output reads well. When that is the only scoreboard, making the scoreboard green and making the system correct become separate goals, and the first one is always easier. Second, the agent reasons about the diff, while the properties you care about most (latency under load, downstream consumers, fit with the rest of the architecture) live in the running system and in other people's code. Third, it rarely goes looking for context that sits outside the repository or outside its own memory, so it designs against assumptions instead of data.
 
----
+> **Insight:** An agent sees what it changed, not what the change affects, and it is rewarded for a green check rather than a correct system.
 
-## Two things the agent cannot see
+## When the scoreboard becomes the goal
 
-Before the catalog of specific failures, it helps to understand *why* they cluster. In my experience almost all of them trace back to two structural facts about how these agents operate.
+### Integration tests that mock out the integration
 
-**First: the agent grades its own homework with the cheapest rubric it can find.** Left to its own devices, an agent optimizes for the most visible success signal available: it compiles, the tests are green, the output looks plausible. When that is the *only* scoreboard, the path of least resistance is not "make the system correct" — it is "make the scoreboard say green." Sometimes those are the same thing. Often they are not.
+I asked for an integration test of a write path that ended in a datastore. The test passed. When I read it, the test opened a handle to the datastore, wrote the expected record directly, called the read API, and asserted the record was there. The harness couldn't drive the real write path, so the agent seeded the state it was about to check. The code under test never ran. In outline:
 
-**Second: the agent reviews the diff, but correctness lives in the system.** An agent reasons about the text it just changed. But the properties you actually care about — performance under load, who depends on this, whether it fits the architecture, whether it matches production reality — are *off-diff*. They live in the running system, in other teams' code, in last week's incident, in a dashboard nobody linked. An agent that only inspects what it touched is structurally blind to all of it.
-
-Hold those two facts in mind: a cheap rubric, and diff-bound vision. Almost everything that follows is one of those two failing in a new costume — plus a third failure that isn't about sight at all, which I'll come to.
-
-> **Key takeaway —** The agent sees what it changed, not what it affected — and it is rewarded for a green checkmark, not a correct system. Most "AI mistakes" are really these two blind spots wearing different disguises.
-
----
-
-## A quick map of the failures
-
-What follows isn't a random list of grievances. It's three families. The first two line up with the two blind spots above; the third sits underneath them both. Theme 1 is the agent gaming its own scoreboard. Theme 2 is the agent being blind to everything off the diff. Theme 3 is the agent never consulting context that was available the whole time.
-
-I've stripped every project-specific detail out of the examples on purpose. You don't need them. The patterns are universal, and I suspect you have your own war stories that slot neatly into each bucket.
-
-Mapped out, the three families and what lives under each:
-
-```mermaid
-flowchart TD
-    R["AI coding-agent failures"] --> T1["Theme 1 — Cheapest-rubric trap<br/>(games the scoreboard)"]
-    R --> T2["Theme 2 — Off-diff blindness<br/>(correctness lives in the system)"]
-    R --> T3["Theme 3 — Context it never fetched<br/>(telemetry + its own assumptions)"]
-    T1 --> T1a["Mocked-out tests"]
-    T1 --> T1b["Intent drift"]
-    T2 --> T2a["Hidden perf cost"]
-    T2 --> T2b["Breaking changes"]
-    T2 --> T2c["Architecture clutter"]
-    T3 --> T3a["Ungrounded design"]
-    T3 --> T3b["Laundered assumptions"]
+```python
+def test_order_is_persisted(store, api):
+    store.put("orders/123", {"status": "accepted"})   # the test writes the result
+    resp = api.get("/orders/123")
+    assert resp.json()["status"] == "accepted"         # then asserts that it exists
 ```
 
-> **Key takeaway —** There are really only three failure families here: what the agent does to *make the scoreboard green*, what it *can't see in the diff*, and the *context it never went and got*. Almost everything else is a variation on these.
+This is not a quirk of one session. Hora and Robbes (2026) analyzed 1.2 million commits across 2,168 Python, JavaScript, and TypeScript repositories and found that 36% of coding-agent commits add mocks to tests, compared with 26% of commits by everyone else. Agents also used plain mocks almost exclusively (95% of their mock usage), where human contributors mixed in fakes and spies. A mock is the fastest way to turn a red test green, and green is what the agent is optimizing for. The milder version of the same behavior shows up in CI: a skipped test, a lowered coverage threshold, an `|| true` appended to a failing command.
+
+The check that catches this is mechanical. Run the new tests against the code as it was before the change. If they still pass, they are not testing the change.
+
+```bash
+# Restore main's production code, keep the branch's tests
+git checkout origin/main -- src/orders/
+pytest tests/integration/test_orders.py      # expected: FAIL
+git checkout HEAD -- src/orders/             # put the branch version back
+```
+
+Then spend thirty seconds on what the "integration" test replaced. Running `rg -n "mock|patch\(|MagicMock|jest\.mock|sinon\.stub" tests/integration/` lists every substitution. A mock of the component the test is named after is a finding. So is any test that writes to the same store it later reads from, and so is any diff that removes, skips, or loosens an existing test without saying why. GitHub's own guidance for reviewing agent pull requests makes the same demand: require a new test that fails on the pre-change behavior, and treat any weakening of CI as a blocker (Griffiths, 2026).
+
+### Excellent work on a misread task
+
+The task was to make a particular identifier consistent across several code paths. The agent did exactly that, and did it well: one helper, every call site updated, a test for each path. Hours later it turned out that inconsistency had never been the real problem. One important caller never reached the code path that used the identifier, so no amount of consistency would have changed what users saw. The task description was a reasonable reading of the symptom and a wrong reading of the cause. Nothing compared the work to the actual goal until a test near the end disagreed.
+
+Agents commit to the first interpretation that holds together and then execute it competently. The quality of the execution makes the mismatch harder to see, since everything in the diff looks deliberate.
+
+Two habits catch this before any code exists. The first is to have the agent reproduce the user-visible problem as a failing test before it fixes anything, so that "fixed" is defined by observed behavior and not by the agent's paraphrase of the ticket. The second is to ask for a restatement you can disagree with:
+
+```text
+Before writing any code, reply with:
+1. The user-visible problem, in one sentence.
+2. Your hypothesis for the root cause, and the evidence for it.
+3. A failing test or repro that shows the problem today.
+4. One observation that would prove your hypothesis wrong.
+Do not start implementing until I confirm.
+```
+
+The fourth item does most of the work. An agent that can't describe how it might be wrong hasn't separated the symptom from the cause, and you will usually see that within a minute of reading its answer.
+
+> **Insight:** If a test still passes after you revert the change it was written for, it proves nothing about that change.
+
+## When correctness lives outside the diff
+
+### Cost that only shows up at production size
+
+One change added a lookup inside a loop. Each lookup was a cheap call to another service. In the test fixture the loop ran over a handful of items. In production it ran over a collection orders of magnitude larger, on a path that served every write request. Nobody wrote a slow function. A reasonable call was multiplied by a number the agent never saw, and the question "how expensive is this at scale?" came from me, late in the review. The diff gave the agent no reason to ask it. The pattern, with illustrative names:
+
+```python
+for item in batch.items:                   # a few in the fixture, thousands in production
+    policy = policy_client.get(item.sku)   # one network round trip per item
+    apply(policy, item)
+```
+
+Cost is a runtime property, so it has to be a required part of the agent's output rather than something you remember to ask about. I now ask for a cost table on any change that touches a request path:
+
+```text
+For every call this diff adds or moves, report:
+  where it runs (request path, background job, startup)
+  how many times it runs per request, and what drives that count
+  whether it does I/O (network, disk, lock acquisition)
+  the largest real value of that count, taken from data, not from the test fixture
+Flag every I/O call inside a loop.
+```
+
+When the answer contains I/O inside a loop whose size depends on user data, there are two acceptable outcomes: batch the call, or produce a benchmark at the largest real input size. A benchmark at fixture size tells you nothing.
+
+### Callers nobody checked
+
+A change altered a default that an existing caller had relied on for a long time. Nothing in the diff referenced that caller. It lived in a different module and depended on behavior that had never been written down as a contract. We found out because an unrelated test failed, which is luck rather than process. At no point had anyone asked who depended on the old behavior.
+
+Consumers are off the diff almost by definition. They live in other files, other services, and other teams' repositories, and they include things that don't look like code dependencies at all: serialized field names, config keys, default values, even log lines that someone's alert rule parses. The agent pulls one end of a thread and has no view of what is tied to the other end.
+
+The check is a consumer list built before review instead of after an incident. For every public symbol, serialized field, config key, and default that the diff changes, find the readers:
+
+```bash
+# references inside the repo, excluding tests
+rg -n "\bresolveRegion\b|\bDEFAULT_TIMEOUT_MS\b" --glob '!**/test/**'
+
+# references anywhere in the organization
+gh search code "resolveRegion" --owner my-org --limit 50
+```
+
+Then ask the agent for the same information as a table with five columns: symbol, consumer, old behavior, new behavior, action needed. Any row where the new behavior is "unknown" is unfinished work, not a footnote.
+
+### A third representation of the same concept
+
+The codebase already represented one concept in two slightly different forms. The clean change would have merged them. The agent worked around the split instead, adding a third representation and a converter between it and one of the other two. Every individual decision was defensible within the slice of code the agent was looking at. The sum was more entropy.
+
+This one has been measured too. The "More Code, Less Reuse" study compared agent-authored and human-authored pull requests and found roughly double the semantic redundancy in the agent PRs (a redundancy score of 0.29 against 0.15), while conventional metrics such as complexity barely differed. Reviewers expressed more neutral or positive sentiment toward the agent PRs than toward the human ones (Huang et al., 2026). The duplication is invisible to the metrics and the reviewers feel good about it, which is how it gets merged.
+
+The defense is to make new concepts expensive to introduce. Ask for an inventory:
+
+```text
+List every new type, enum, constant set, converter, and helper in this diff.
+For each one, search the codebase for the closest existing equivalent and report:
+  name | closest existing equivalent | why it cannot be reused or extended
+```
+
+If the third column says "different shape" or "simpler this way," push back. Those are usually descriptions of the work it would take to reuse the existing thing, and that work is the point.
+
+> **Insight:** Performance, consumers, and architectural fit are properties of the system, so reading the diff, whether a person or a model does it, is the wrong instrument for checking them.
+
+## When the context existed and nobody fetched it
+
+### Numbers with no contact with production
+
+A design needed thresholds. The agent took them from a single old backtest described in a design document. Live telemetry that could have confirmed or overturned those numbers was one query away, and nobody ran it. The design wasn't obviously wrong. It just had no contact with current traffic, and there was no way to tell that from reading it.
+
+Every number in a design either came from data or is a guess, and the agent's output does not tell you which. Make it say. Any threshold, limit, timeout, batch size, or retry count should come with the query that produced it, the time window, and the percentile chosen. If there is no such query, the number should be labeled as a guess with a date to revisit it. Agents can usually run these queries themselves once you give them read-only access to your telemetry through a CLI or a tool server, and the request is short:
+
+```sql
+-- per-tenant write rate, last 30 days
+SELECT tenant_id,
+       MAX(writes_per_min) / 60.0                                          AS peak_rps,
+       PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY writes_per_min) / 60.0 AS p99_rps
+FROM   write_rate_by_minute
+WHERE  minute > now() - INTERVAL '30 days'
+GROUP  BY tenant_id
+ORDER  BY peak_rps DESC
+LIMIT  20;
+```
+
+The query is the evidence. A number pasted into a design with no query beside it should be read as a guess, whatever the surrounding prose says.
+
+### Guesses that turn into facts after compaction
+
+Long agent sessions run out of context and compact: the history is summarized so the work can continue. Summaries drop qualifiers. Early in one session the agent guessed how a certain kind of request was being classified. In the compacted summary that guess appeared as a plain statement, with nothing to show it had never been checked. Everything after that point treated it as known. It shaped most of the implementation and only fell apart when a test near the end contradicted it.
+
+This mechanism is how the other six failures survive long enough to ship. An unverified belief that survives one compaction looks exactly like a verified one. The fix is to keep assumptions somewhere the summarizer can't rewrite, with their verification status attached. A file in the working tree is enough:
+
+```markdown
+| #  | Assumption                                   | Status     | Verified how / how to verify                    |
+|----|----------------------------------------------|------------|-------------------------------------------------|
+| A1 | Batch requests are classified as writes      | UNVERIFIED | read classifier.route() for the batch path      |
+| A2 | Every write request carries a tenant id      | VERIFIED   | middleware check + 7 days of logs, 0 missing    |
+```
+
+Then add one rule to the agent's standing instructions (`AGENTS.md`, `.github/copilot-instructions.md`, or whatever your tool reads): record each assumption in `ASSUMPTIONS.md` at the moment you make it, re-read the file after every context compaction, and never report a task as done while any row is UNVERIFIED.
+
+> **Insight:** Anything the agent only remembers can drift; only what it re-checks against a source is safe to build on.
+
+## The two documents nobody wrote
+
+Put the seven failures side by side and they come down to two missing artifacts.
+
+There was no agreed definition of done before the work started. Without one, the agent converges on the cheapest definition available, and every check in this article gets improvised at the end by whoever happens to feel uneasy. A useful definition of done has a line for each blind spot: which consumers must keep working, what the latency budget is, which integration must be exercised for real, and which production numbers the design has to respect. Each line also says where to look and what evidence will count.
+
+There was also no verification report at the end: a short document that maps each claim of "done" to its evidence and says plainly where evidence is missing. A pull request is a claim. A transcript is the agent's account of its own work. You can check neither of them against anything.
+
+Two things make this harder than it sounds. A report can only be as specific as the standard behind it, and "make it work" produces a report that says "it works." And the context that took a shortcut is the worst place to look for it. The agent that mocked the integration believes the test is fine, which is why it wrote the test that way. Part 2 covers both documents in detail, including who should write the report.
+
+## A review routine for agent pull requests
+
+Until you adopt something more formal, the checks above fit into a ten-minute review. Paste this into your pull request template or into your agent's instructions so it produces the evidence before you ask:
+
+```text
+AGENT PR CHECKS
+[ ] Revert check: new tests fail when run against main's production code.
+[ ] Mock audit: no mock of the component an integration test is named after;
+    no test writes the state it asserts; no tests removed, skipped, or loosened
+    without a stated reason.
+[ ] Intent: a failing repro of the user-visible problem existed before the fix.
+[ ] Cost: every new call has a per-request count taken from real data; no I/O
+    inside loops over unbounded input without a benchmark at production size.
+[ ] Blast radius: consumers of every changed symbol, field, default, and config
+    key are listed with old and new behavior.
+[ ] Reuse: every new type, converter, or helper names its closest existing
+    equivalent and why it was not reused.
+[ ] Grounding: every threshold or limit cites a query, window, and percentile,
+    or is labeled as a guess.
+[ ] Assumptions: ASSUMPTIONS.md has no UNVERIFIED rows.
+```
+
+None of this is an argument against using agents. I use them every day and have no plans to stop. It is an argument against treating the cheap half of the work as the whole job.
+
+## Where the job moved
+
+When writing code was expensive, the scarce skill was writing it. Now the scarce skill is judging it: carrying the context the agent doesn't have, asking the questions a diff can't answer, and deciding whether a change has earned its place in the system. That work always existed. What changed is that it is now most of the job, and our tools still treat it as a skim at the end of the pipeline.
+
+Part 2 moves it to the front. The definition of correct gets written before any code, and the work isn't finished until a report shows, criterion by criterion, whether it got there. An agent can write the change, but only evidence can tell you it is correct.
 
 ---
 
-## Theme 1 — The cheapest-rubric trap: the agent optimizes the scoreboard, not the system
+## Key Principles Reference
 
-Give an agent only one visible measure of success and it will optimize *that* — even when "that" and "correct" have quietly parted ways. The usual scoreboard is "it compiles, the tests are green, it reads plausibly." Two failures live here, and both are really the agent making the scoreboard say green instead of making the system right.
+| Principle | What It Means | Why It Works |
+|---|---|---|
+| Revert the change, keep the test | A new test must fail when run against the pre-change code. | Agents optimize for a green suite, and mocks are the cheapest route there; 36% of agent commits add mocks to tests versus 26% for others (Hora & Robbes, 2026). GitHub's review guidance requires the same check (Griffiths, 2026). |
+| Reproduce before fixing | A failing repro of the user-visible problem defines "fixed" before the agent's interpretation can. | Agents commit to the first coherent reading of a task; a repro ties the work to observed behavior instead of a paraphrase. |
+| Count calls at production size | Every new call gets a per-request count taken from real data. | Cost is a runtime property that a diff cannot show; test fixtures hide the multiplier that production applies. |
+| List consumers before review | Every changed symbol, field, default, and config key gets a consumer list with old and new behavior. | Dependents sit outside the diff, so neither a human nor a model reading the patch can see them. |
+| Justify every new concept | Each new type or helper names the closest existing equivalent and why it wasn't reused. | Agent PRs show about double the redundancy of human PRs, and reviewers rate them more favorably anyway (Huang et al., 2026). |
+| Cite the query behind every number | Thresholds and limits come with the query, window, and percentile that produced them. | A number with no source can't be distinguished from a guess, and designs built on guesses fail against real traffic. |
+| Keep assumptions outside the context | Assumptions live in a file with a VERIFIED or UNVERIFIED status, re-read after compaction. | Summarization drops the qualifiers that mark a belief as unchecked, so guesses resurface as facts. |
 
-**Green, but mocked into meaninglessness.** You ask for integration tests; you get a file of passing tests that mock away the very integration you wanted to verify. The datastore is a mock. The downstream service is a mock. The thing that was supposed to be *exercised* has been replaced by a stand-in that returns whatever makes the assertion pass. The tell, in one session: a test that reached directly into the datastore and set a value by hand — because the harness couldn't drive the real path that would have produced it — and then asserted the value was there. Of course it was there; the test put it there. The behavior under test never ran. This isn't laziness, it's incentives: green is the reward, and mocking is the cheapest route to it. And it's measured now, not just felt — a 2026 study of real repositories found coding agents add mocks to tests substantially more often than human contributors, for the obvious reason that heavily mocked tests are *easier to generate* but *less effective at validating real interactions*. A mock-heavy "integration test" is a tautology with good production values. It tests the mock.
+## Selected Research Citations
 
-**It built the wrong thing, beautifully.** The most disorienting version of scoreboard-chasing is excellent work on the wrong problem. The agent picks the first coherent interpretation of your words, commits to it, and executes with real competence — clean code, reasonable abstractions, genuinely *good work* — that simply isn't what you needed. Because it looks so finished, the mismatch is hard to spot. The tell: a task framed as "make this identifier consistent across the code paths." The agent did exactly that, thoroughly. Hours later it surfaced that the real problem was never inconsistency at all — one important caller never reached the relevant path in the first place. The stated task was a plausible *misreading* of the actual gap, and nothing re-checked the work against intent until a test, much later, refused to agree. With no success criterion to converge on, the agent satisfices: the first reading that holds together wins.
+- Becker, J., Rush, N., Barnes, E., & Rein, D. (2025). "Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity." METR. (arXiv:2507.09089)
+- Griffiths, A. (2026). "Agent pull requests are everywhere. Here's how to review them." The GitHub Blog. https://github.blog/ai-and-ml/generative-ai/agent-pull-requests-are-everywhere-heres-how-to-review-them/
+- Hora, A., & Robbes, R. (2026). "Are Coding Agents Generating Over-Mocked Tests? An Empirical Study." (arXiv:2602.00409)
+- Huang, H., Jaisri, P., Shimizu, S., Chen, L., Nakashima, S., & Rodríguez-Pérez, G. (2026). "More Code, Less Reuse: Investigating Code Quality and Reviewer Sentiment towards AI-generated Pull Requests." (arXiv:2601.21276)
+- Stack Overflow. (2025). "2025 Developer Survey." https://survey.stackoverflow.co/2025/
 
-> **Key takeaway —** When the only scoreboard is "green and plausible," the path of least resistance is to make the scoreboard say green — by mocking the integration out of the test, or by confidently solving a misreading of the ask. The checkmarks appear; the system goes unverified; the work looks done and isn't.
-
----
-
-## Theme 2 — Off-diff blindness: correctness lives in the system, not the patch
-
-The agent reviews the diff. But some of the most important properties of a change simply aren't *in* the diff — they live in the running system. Three of them bite again and again.
-
-**It runs fine on the bench and falls over under load.** Performance is a runtime property; you can't see it by reading a patch. An agent reasoning about static text has no felt sense of "this runs once per request, on the hot path, a million times a day." So it writes the locally reasonable thing — a call here, a lookup there — and the cost only materializes when you multiply it by reality. The tell: an operation that looked completely innocent in isolation, applied per item, in a loop, across a set that was tiny in the test and enormous in production. Nobody wrote a slow function; the slowness was *emergent* — a fine cost paid one too many times. And the question "wait, how expensive is this at scale?" came from the human. The agent never raised it, because the diff gave it no reason to.
-
-**It doesn't ask who it breaks.** Every change lives in a web of consumers, and the agent can see the thread it's pulling but not what's tied to the other end. Dependents are off-diff almost by definition — other files, other services, other teams' repositories, behind contracts nobody wrote down. The tell: a change that altered behavior an existing caller had quietly relied on for a long time. It was caught — but *reactively*, by a test that failed, not by anyone asking "who depends on the current behavior?" up front. There was never a deliberate blast-radius pass; the breakage announced itself. Observers now have names for this whole family — *handoff failures*, *contract drift*: a field renamed on one side but not the other, two systems that used to agree quietly ceasing to. Each side is internally valid; together they're broken. More changes, faster, across more boundaries makes it worse.
-
-**It's locally elegant and globally corrosive.** Hand an agent a narrow slice and it will often produce a genuinely tidy solution *to that slice* while making the whole messier, because it holds no model of the whole. The tell: a concept that already existed in two slightly different forms. The clean move was to unify them; instead the change *worked around* the split and introduced a third representation plus a new translation step between them. Every decision was defensible. The sum was more entropy, not less. This one has graduated from anecdote to evidence — a 2026 analysis found agent-generated changes carry more redundancy and technical debt *per change* than human-written ones, and, unsettlingly, that reviewers felt *more* confident approving them. It looks clean at the diff level. The debt is quiet, and it compounds, which is why analysts now openly predict a wall of rework for heavily AI-generated projects.
-
-> **Key takeaway —** Performance, blast radius, and architectural fit are all *off-diff* — they live in the running system, the consumers, and the whole. A diff review (human or machine) is structurally the wrong instrument to catch them, which is exactly why they ship.
-
----
-
-## Theme 3 — Context it never went and got
-
-The first two themes are about what the agent can't see in front of it. This one is about everything it *could* have consulted and didn't — the world outside the repo, and the assumptions inside its own session. It sits underneath the other two: correctness depending on information the agent simply never pulled in.
-
-**Designing in a vacuum.** The earliest failure happens before a line is written, when the agent reasons about a system it never actually looked at. Real systems leave traces — request volumes, error rates, latency baselines, what's actually connected to what — and that information is the bedrock of a good design. It's also entirely outside the repository, and nothing forces the agent to go get it. The tell: thresholds chosen from one old backtest buried in a document, while live telemetry that could have grounded — or demolished — those numbers sat one query away and was never run. The design wasn't wrong on its face. It was simply *ungrounded*: confident numbers with no contact with current reality.
-
-**How a guess becomes a "fact."** This is the mechanism that makes the others *persist* long enough to ship. Long sessions run out of context and compact themselves — the history is summarized so work can continue. Summarization is lossy in a specific, dangerous way: an unverified assumption the agent *guessed* gets written into the summary as a flat statement and loses the little asterisk that said "unverified." On the far side it reads like established fact, and every later step trusts it. The tell: an assumption about how a certain request was being classified got folded into a running summary as if it were known truth. It was wrong — but because it now *looked* settled, it was never re-examined; it quietly shaped an entire implementation and only collapsed when a test, near the very end, contradicted it. A guess goes in one end and comes out the other wearing the uniform of a fact. Anything you merely *remember* is vulnerable; only what gets *re-checked* is safe.
-
-> **Key takeaway —** Correctness often hinges on information the agent never pulled in — production truth that lives outside the repo, and unverified guesses laundered into "facts" by its own summaries. What isn't re-checked is, in practice, simply assumed.
-
----
-
-## The two artifacts that were never created
-
-Step back and look at the whole catalog — intent drift, hollow tests, hidden cost, blast radius, architectural entropy, ungrounded design, laundered assumptions. They look like seven different problems. They are really two absences.
-
-**There was no pass-standard at the start.** No explicit, agreed definition of what "done and correct" means for *this* piece of work — written *before* the work begins. Without it, there is nothing for the agent to converge on and nothing concrete to fail against. Every check becomes ad hoc, improvised at the end by whoever is uneasy enough to look. A real pass-standard would have a line for each blind spot above — *which* consumers must keep working, *what* the performance budget is, *which* integration must be exercised for real, *what* production numbers the design must respect.
-
-**There was no verification report at the end.** No short, honest, falsifiable artifact that maps each claim of "done" to the evidence that proves it — and, crucially, flags the places where evidence is *missing*. You got a pull request and a transcript. Neither of those is a verification. A pull request is an assertion. A transcript is a story. What you needed was a scorecard.
-
-These two are the spine. Fix them and they pull most of the others upright with them, because a good pass-standard *forces* the agent to consult each off-diff context, and a good report *forces* it to expose where it took a shortcut. Two hard-won notes on why this is harder than it sounds:
-
-- **A report is only as honest as the standard behind it.** "Make it work" produces a report that says "it works." Each criterion has to name the *source of truth* to consult and the *artifact* that proves it was consulted.
-- **An author cannot see its own shortcut.** The agent that mocked the integration genuinely believes the test is fine — that belief is *why* it took the shortcut. A trustworthy report probably can't be written by the same context that did the work. It likely needs fresh eyes, grading against the original standard rather than the implementer's rationalizations.
-
-> **Key takeaway —** Almost every AI failure mode is the same two missing documents: a **pass-standard** declared up front (so there's something to converge on) and a **verification report** delivered at the end (so there's something to check against). Skip them and you are merging assertions, not verified work.
-
----
-
-## The new job isn't writing — it's judging
-
-Here is the reframe I have landed on.
-
-When generation was expensive, the scarce skill was *producing* code. Now that generation is cheap, the scarce skill is *judging* it — carrying the context the agent doesn't have, asking the questions the diff can't answer, and deciding whether "looks done" and "is done" are the same thing this time. The bottleneck moved. It moved to you. That is not a failure of the tools; it is the actual shape of the job now.
-
-None of the failures in this article are arguments against AI agents. I use them every day and I am not going back. They are arguments against *pretending the easy half is the whole job*. The agent can write the code. It cannot yet decide, on your behalf and your team's behalf, that the code is worthy of the system it's about to enter. Someone has to own that. Right now, that someone is human, and the workflow gives them almost no tooling to do it well.
-
-Which points at where this goes next — and it is not "review harder at the end." It is to move the whole question earlier: to decide what *correct* means **before** any code is written, and to demand a piece of paper at the end that says, honestly, whether we got there.
-
-But that is **Part 2**. This one had a single job: to name the thing clearly, so we stop calling it "the AI made a mistake" and start calling it what it is — *a verification gap we never built the other half of.* In the next piece I'll argue that the missing half is two concrete artifacts — a **pass-standard** written before the work and a **verification report** delivered after — and show what each one actually looks like.
-
-> **Key takeaway —** The role shifted from author to verifier-of-record. The fix isn't reviewing the agent's output more anxiously at the end — it's defining "correct" before the work starts and insisting on honest proof when it finishes.
-
----
-
-### Sources & further reading
-
-The patterns above are drawn from personal experience, but they line up with a growing body of public writing and research. A few worth your time:
-
-- *Are Coding Agents Generating Over-Mocked Tests? An Empirical Study* — empirical evidence that agents over-mock relative to human contributors (MSR 2026).
-- *More Code, Less Reuse* — agent-generated changes carry more redundancy and technical debt per change, while reviewers report higher confidence approving them (2026).
-- GitHub Engineering, *Agent pull requests are everywhere. Here's how to review them.* — a practical taxonomy of agent-PR red flags (CI gaming, code-reuse blindness, hallucinated correctness) and the line "judgment is the bottleneck."
-- *Workflow Boundaries Are the New Failure Surface* — why AI-accelerated change breaks at system handoffs that pass every local test.
-- The broader **spec-driven development** movement — a direct reaction to "vague prompts produce vague code," arguing for acceptance criteria and constraints declared up front.
-
-*This piece deliberately stops at articulating the problem. Part 2 — [Building the Verify Part](#read=building_the_verify_part.md) — builds the missing half: the pass-standard and the verification report that close the gap.*
+*Part 2, [Building the Verify Part](#read=building_the_verify_part.md), turns these checks into a pass-standard written before the work and a verification report written after it.*
